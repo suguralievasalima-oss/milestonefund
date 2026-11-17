@@ -4,16 +4,18 @@ const hre = require("hardhat");
 
 async function main() {
   const { ethers, network } = hre;
-  // Период голосования: из .env (VOTING_PERIOD, сек), иначе 5 минут для localhost и 3 дня для остальных сетей
-  const defaultPeriod = network.name === "localhost" || network.name === "hardhat" ? 300 : 3 * 24 * 60 * 60;
-  const votingPeriod = Number(process.env.VOTING_PERIOD || defaultPeriod);
+  // Периоды из .env (VOTING_PERIOD, SUBMISSION_PERIOD, сек). По умолчанию на localhost
+  // голосование 5 минут и срок сдачи этапа 1 час, в остальных сетях 3 и 30 дней.
+  const local = network.name === "localhost" || network.name === "hardhat";
+  const votingPeriod = Number(process.env.VOTING_PERIOD || (local ? 300 : 3 * 24 * 60 * 60));
+  const submissionPeriod = Number(process.env.SUBMISSION_PERIOD || (local ? 3600 : 30 * 24 * 60 * 60));
 
   const [deployer] = await ethers.getSigners();
   console.log(`Network: ${network.name}`);
   console.log(`Deployer: ${deployer.address}`);
-  console.log(`Voting period: ${votingPeriod} s`);
+  console.log(`Voting period: ${votingPeriod} s, submission period: ${submissionPeriod} s`);
 
-  const fund = await ethers.deployContract("MilestoneFund", [votingPeriod]);
+  const fund = await ethers.deployContract("MilestoneFund", [votingPeriod, submissionPeriod]);
   await fund.waitForDeployment();
   const address = await fund.getAddress();
   console.log(`MilestoneFund deployed to: ${address}`);
@@ -30,7 +32,9 @@ async function main() {
   console.log(`Saved address and ABI to frontend/src/contract/MilestoneFund.json`);
 
   if (network.name !== "localhost" && network.name !== "hardhat") {
-    console.log(`\nVerify with:\n  npx hardhat verify --network ${network.name} ${address} ${votingPeriod}`);
+    console.log(
+      `\nVerify with:\n  npx hardhat verify --network ${network.name} ${address} ${votingPeriod} ${submissionPeriod}`
+    );
   }
 }
 

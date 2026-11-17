@@ -6,12 +6,21 @@ import { Progress } from "./CampaignList";
 export default function CampaignDetails({ wallet, campaign: c, now, version, onBack, onChanged }) {
   const [milestones, setMilestones] = useState([]);
   const [me, setMe] = useState({ contribution: 0n, voted: false, refunded: false });
+  const [submissionPeriod, setSubmissionPeriod] = useState(null);
   const [amount, setAmount] = useState("");
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
   const [info, setInfo] = useState("");
 
   const { readContract, writeContract, account } = wallet;
+
+  useEffect(() => {
+    if (!readContract) return;
+    readContract
+      .submissionPeriod()
+      .then((p) => setSubmissionPeriod(Number(p)))
+      .catch((e) => console.error(e));
+  }, [readContract]);
 
   // Загружаем этапы и данные текущего пользователя
   useEffect(() => {
@@ -57,6 +66,9 @@ export default function CampaignDetails({ wallet, campaign: c, now, version, onB
   const current = c.currentMilestone < c.milestoneCount ? milestones[c.currentMilestone] : null;
   const fundingOpen = c.state === 0 && now < c.deadline;
   const canFinalizeFunding = c.state === 0 && (now >= c.deadline || c.totalRaised >= c.goal);
+  // Срок, до которого автор должен отправить текущий этап на голосование
+  const submitBy = submissionPeriod !== null && c.state === 1 ? c.lastProgress + submissionPeriod : null;
+  const stalled = submitBy !== null && current?.status === 0 && now >= submitBy;
 
   let refundEstimate = 0n;
   if (me.contribution > 0n && !me.refunded) {
@@ -182,7 +194,12 @@ export default function CampaignDetails({ wallet, campaign: c, now, version, onB
                 <b>{MilestoneStatus[current.status]}</b>
               </p>
 
-              {current.status === 0 && isCreator && (
+              {current.status === 0 && submitBy !== null && !stalled && (
+                <p className="muted small">
+                  The creator must submit it by {fmtTime(submitBy)} ({timeLeft(submitBy, now)}).
+                </p>
+              )}
+              {current.status === 0 && isCreator && !stalled && (
                 <Btn
                   label="Start milestone vote"
                   onClick={() =>
@@ -190,14 +207,31 @@ export default function CampaignDetails({ wallet, campaign: c, now, version, onB
                   }
                 />
               )}
-              {current.status === 0 && !isCreator && (
+              {current.status === 0 && !isCreator && !stalled && (
                 <p className="muted small">Waiting for the creator to submit this milestone for a vote.</p>
+              )}
+              {stalled && (
+                <>
+                  <p className="bad small">The creator missed the deadline. Anyone can cancel the campaign.</p>
+                  <Btn
+                    label="Cancel stalled campaign"
+                    kind="danger"
+                    onClick={() =>
+                      run(
+                        "Cancel stalled campaign",
+                        () => writeContract.cancelStalled(c.id),
+                        "Campaign cancelled. Investors can now claim refunds."
+                      )
+                    }
+                  />
+                </>
               )}
 
               {current.status === 1 && now < current.voteEnd && (
                 <>
                   <p className="muted small">Voting ends in {timeLeft(current.voteEnd, now)}.</p>
-                  {me.contribution > 0n && !me.voted && (
+                  {isCreator && <p className="muted small">The creator cannot vote on their own milestones.</p>}
+                  {me.contribution > 0n && !me.voted && !isCreator && (
                     <div className="inline">
                       <Btn
                         label="Approve"
@@ -212,7 +246,7 @@ export default function CampaignDetails({ wallet, campaign: c, now, version, onB
                     </div>
                   )}
                   {me.voted && <p className="ok small">You have voted on this milestone.</p>}
-                  {me.contribution === 0n && <p className="muted small">Only investors can vote.</p>}
+                  {me.contribution === 0n && !isCreator && <p className="muted small">Only investors can vote.</p>}
                 </>
               )}
 

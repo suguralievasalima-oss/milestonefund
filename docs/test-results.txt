@@ -1,14 +1,13 @@
 
 
-◇ injected env (0) from .env
 
 
   MilestoneFund
     Deployment
-      ✔ stores the voting period (1446ms)
-      ✔ rejects zero voting period (52ms)
+      ✔ stores the voting and submission periods (1596ms)
+      ✔ rejects zero voting or submission period (73ms)
     Campaign creation
-      ✔ creates a campaign and emits CampaignCreated (45ms)
+      ✔ creates a campaign and emits CampaignCreated (44ms)
       ✔ reverts when milestone sum differs from goal
       ✔ reverts when arrays have different lengths
       ✔ reverts with zero milestones
@@ -16,44 +15,53 @@
       ✔ reverts with zero goal or zero duration
       ✔ reverts for unknown campaign id
     Contributions
-      ✔ records contributions and emits Contributed (66ms)
+      ✔ records contributions and emits Contributed (74ms)
       ✔ reverts after the deadline
       ✔ reverts on zero value
-      ✔ reverts once funding is finalized (vote weights are frozen) (54ms)
+      ✔ reverts once funding is finalized (vote weights are frozen) (52ms)
     Funding finalization
       ✔ moves to Active when the goal is reached (even before deadline)
       ✔ moves to Failed after deadline if the goal is not reached
       ✔ cannot finalize before deadline if goal not reached
     Voting
-      ✔ only the creator can start a vote (52ms)
+      ✔ only the creator can start a vote (55ms)
       ✔ cannot start a vote while still funding
-      ✔ cannot start a second vote on the same milestone (48ms)
+      ✔ cannot start a second vote on the same milestone (107ms)
       ✔ non-investors cannot vote
       ✔ cannot vote twice
       ✔ cannot vote after voteEnd
       ✔ cannot vote when no vote is open
-      ✔ vote weight equals contribution
+      ✔ vote weight equals contribution (47ms)
       ✔ cannot finalize before voteEnd
       ✔ a tie by weight is not a majority: milestone rejected
+    Creator stake
+      ✔ the creator cannot vote on own milestones (57ms)
+      ✔ quorum is measured against outside investors only
+      ✔ outside investors decide even when the creator holds the majority of funds
+    Stalled campaigns
+      ✔ cannot be cancelled before the submission period ends
+      ✔ anyone can cancel after the creator misses the deadline; investors get full refunds
+      ✔ cannot be cancelled while a vote is open
+      ✔ the deadline restarts after each paid milestone (57ms)
     Quorum
       ✔ rejects a milestone when turnout is below 30%, even if all votes are yes
       ✔ approves at exactly 30% turnout
     Withdrawals
       ✔ cannot withdraw before approval
       ✔ non-creator cannot withdraw
-      ✔ full happy path: all milestones approved, creator receives everything (136ms)
-      ✔ overfunding is paid out with the last milestone (54ms)
-      ✔ cannot withdraw the same milestone twice (62ms)
+      ✔ full happy path: all milestones approved, creator receives everything (161ms)
+      ✔ overfunding is paid out with the last milestone (38ms)
+      ✔ cannot withdraw the same milestone twice (65ms)
     Refunds
-      ✔ full refund when funding failed (62ms)
-      ✔ proportional refund of the remainder after a rejected milestone (66ms)
-      ✔ cannot refund twice (62ms)
+      ✔ full refund when funding failed (70ms)
+      ✔ proportional refund of the remainder after a rejected milestone (65ms)
+      ✔ cannot refund twice (60ms)
       ✔ cannot refund while the campaign is active
-      ✔ non-investors have nothing to refund (40ms)
+      ✔ non-investors have nothing to refund (48ms)
     Security
-      ✔ blocks reentrancy on refund (43ms)
+      ✔ blocks reentrancy on refund (51ms)
       ✔ campaigns are isolated from each other
 
 
-  40 passing (3s)
+  47 passing (3s)
 

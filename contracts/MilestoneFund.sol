@@ -44,6 +44,7 @@ contract MilestoneFund is ReentrancyGuard {
         uint64 deadline;
         uint256 totalRaised;
         uint256 released;
+        uint64 lastProgress; // момент, с которого отсчитывается срок сдачи текущего этапа
         uint32 milestoneCount;
         uint32 currentMilestone;
         CampaignState state;
@@ -59,6 +60,11 @@ contract MilestoneFund is ReentrancyGuard {
 
     /// @notice Длительность голосования за этап (в секундах), задаётся при деплое
     uint256 public immutable votingPeriod;
+
+    /// @notice Сколько времени (в секундах) у автора есть, чтобы отправить текущий этап
+    ///         на голосование. Если срок пропущен, кампанию может отменить кто угодно,
+    ///         и инвесторы забирают остаток — деньги не застревают в контракте.
+    uint256 public immutable submissionPeriod;
 
     Campaign[] private _campaigns;
     mapping(uint256 => mapping(uint256 => Milestone)) private _milestones;
@@ -78,6 +84,7 @@ contract MilestoneFund is ReentrancyGuard {
     event MilestoneFinalized(uint256 indexed id, uint256 indexed milestone, bool approved, uint256 yesWeight, uint256 noWeight);
     event MilestoneWithdrawn(uint256 indexed id, uint256 indexed milestone, uint256 amount);
     event Refunded(uint256 indexed id, address indexed investor, uint256 amount);
+    event CampaignStalled(uint256 indexed id, uint256 indexed milestone);
 
     // ---------------------------------------------------------------------
     // Ошибки (дешевле по газу, чем строки в require)
@@ -99,6 +106,8 @@ contract MilestoneFund is ReentrancyGuard {
     error VotingNotEnded();
     error NothingToRefund();
     error TransferFailed();
+    error CreatorCannotVote();
+    error NotStalled();
 
     // ---------------------------------------------------------------------
     // Модификаторы
@@ -120,9 +129,11 @@ contract MilestoneFund is ReentrancyGuard {
     }
 
     /// @param votingPeriod_ длительность голосования в секундах (например, 3 дня; для демо — 5 минут)
-    constructor(uint256 votingPeriod_) {
-        if (votingPeriod_ == 0) revert InvalidDuration();
+    /// @param submissionPeriod_ срок на отправку каждого этапа на голосование (например, 30 дней)
+    constructor(uint256 votingPeriod_, uint256 submissionPeriod_) {
+        if (votingPeriod_ == 0 || submissionPeriod_ == 0) revert InvalidDuration();
         votingPeriod = votingPeriod_;
+        submissionPeriod = submissionPeriod_;
     }
 
     // ---------------------------------------------------------------------
@@ -163,6 +174,7 @@ contract MilestoneFund is ReentrancyGuard {
                 deadline: deadline,
                 totalRaised: 0,
                 released: 0,
+                lastProgress: 0,
                 milestoneCount: uint32(n),
                 currentMilestone: 0,
                 state: CampaignState.Funding
@@ -190,6 +202,7 @@ contract MilestoneFund is ReentrancyGuard {
         bool reached = c.totalRaised >= c.goal;
         if (!reached && block.timestamp < c.deadline) revert DeadlineNotReached();
         c.state = reached ? CampaignState.Active : CampaignState.Failed;
+        c.lastProgress = uint64(block.timestamp);
         emit FundingFinalized(id, reached, c.totalRaised);
     }
 
@@ -213,12 +226,14 @@ contract MilestoneFund is ReentrancyGuard {
     }
 
     /// @notice Голос инвестора за текущий этап. Вес голоса равен размеру вклада.
+    ///         Автор не голосует за свои этапы, даже если сам вложил деньги.
     function vote(uint256 id, bool approve) external exists(id) inState(id, CampaignState.Active) {
         Campaign storage c = _campaigns[id];
         uint256 idx = c.currentMilestone;
         Milestone storage m = _milestones[id][idx];
         if (m.status != MilestoneStatus.Voting) revert WrongMilestoneStatus();
         if (block.timestamp >= m.voteEnd) revert VotingClosed();
+        if (msg.sender == c.creator) revert CreatorCannotVote();
         uint256 weight = _contributions[id][msg.sender];
         if (weight == 0) revert NotInvestor();
         if (_hasVoted[id][idx][msg.sender]) revert AlreadyVoted();
@@ -230,8 +245,8 @@ contract MilestoneFund is ReentrancyGuard {
     }
 
     /// @notice Подводит итог голосования. Этап одобрен, если явка >= QUORUM_PERCENT
-    ///         от собранных средств и голосов «за» больше, чем «против».
-    ///         Иначе кампания отменяется и открываются возвраты.
+    ///         от голосующих средств (собрано минус вклад автора) и голосов «за»
+    ///         больше, чем «против». Иначе кампания отменяется и открываются возвраты.
     function finalizeMilestone(uint256 id) external exists(id) inState(id, CampaignState.Active) {
         Campaign storage c = _campaigns[id];
         uint256 idx = c.currentMilestone;
@@ -239,7 +254,8 @@ contract MilestoneFund is ReentrancyGuard {
         if (m.status != MilestoneStatus.Voting) revert WrongMilestoneStatus();
         if (block.timestamp < m.voteEnd) revert VotingNotEnded();
 
-        bool quorum = (m.yesWeight + m.noWeight) * 100 >= c.totalRaised * QUORUM_PERCENT;
+        uint256 votingStake = c.totalRaised - _contributions[id][c.creator];
+        bool quorum = votingStake > 0 && (m.yesWeight + m.noWeight) * 100 >= votingStake * QUORUM_PERCENT;
         bool approved = quorum && m.yesWeight > m.noWeight;
         if (approved) {
             m.status = MilestoneStatus.Approved;
@@ -274,10 +290,23 @@ contract MilestoneFund is ReentrancyGuard {
         m.status = MilestoneStatus.Paid;
         c.released += payout;
         c.currentMilestone = uint32(idx + 1);
+        c.lastProgress = uint64(block.timestamp);
         if (idx + 1 == c.milestoneCount) c.state = CampaignState.Completed;
 
         emit MilestoneWithdrawn(id, idx, payout);
         _send(c.creator, payout);
+    }
+
+    /// @notice Отменяет кампанию, если автор не отправил текущий этап на голосование
+    ///         в течение submissionPeriod. Вызвать может кто угодно. После отмены
+    ///         инвесторы забирают невыплаченный остаток через refund().
+    function cancelStalled(uint256 id) external exists(id) inState(id, CampaignState.Active) {
+        Campaign storage c = _campaigns[id];
+        uint256 idx = c.currentMilestone;
+        if (_milestones[id][idx].status != MilestoneStatus.Pending) revert WrongMilestoneStatus();
+        if (block.timestamp < c.lastProgress + submissionPeriod) revert NotStalled();
+        c.state = CampaignState.Cancelled;
+        emit CampaignStalled(id, idx);
     }
 
     /// @notice Возврат средств инвестору.

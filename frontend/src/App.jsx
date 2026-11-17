@@ -16,6 +16,7 @@ function toCampaign(id, c) {
     deadline: Number(c.deadline),
     totalRaised: c.totalRaised,
     released: c.released,
+    lastProgress: Number(c.lastProgress),
     milestoneCount: Number(c.milestoneCount),
     currentMilestone: Number(c.currentMilestone),
     state: Number(c.state),

@@ -43,6 +43,8 @@ const ERROR_TEXT = {
   VotingNotEnded: "Voting has not ended yet.",
   NothingToRefund: "Nothing to refund for this account.",
   TransferFailed: "ETH transfer failed.",
+  CreatorCannotVote: "The creator cannot vote on their own milestones.",
+  NotStalled: "The creator still has time to submit this milestone.",
 };
 
 export function decodeError(err, iface) {

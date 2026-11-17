@@ -9,6 +9,11 @@
           "internalType": "uint256",
           "name": "votingPeriod_",
           "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "submissionPeriod_",
+          "type": "uint256"
         }
       ],
       "stateMutability": "nonpayable",
@@ -22,6 +27,11 @@
     {
       "inputs": [],
       "name": "CampaignNotFound",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "CreatorCannotVote",
       "type": "error"
     },
     {
@@ -57,6 +67,11 @@
     {
       "inputs": [],
       "name": "NotInvestor",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "NotStalled",
       "type": "error"
     },
     {
@@ -134,6 +149,25 @@
         }
       ],
       "name": "CampaignCreated",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": true,
+          "internalType": "uint256",
+          "name": "id",
+          "type": "uint256"
+        },
+        {
+          "indexed": true,
+          "internalType": "uint256",
+          "name": "milestone",
+          "type": "uint256"
+        }
+      ],
+      "name": "CampaignStalled",
       "type": "event"
     },
     {
@@ -382,6 +416,19 @@
           "type": "uint256"
         }
       ],
+      "name": "cancelStalled",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "id",
+          "type": "uint256"
+        }
+      ],
       "name": "contribute",
       "outputs": [],
       "stateMutability": "payable",
@@ -493,6 +540,11 @@
               "internalType": "uint256",
               "name": "released",
               "type": "uint256"
+            },
+            {
+              "internalType": "uint64",
+              "name": "lastProgress",
+              "type": "uint64"
             },
             {
               "internalType": "uint32",
@@ -675,6 +727,19 @@
       "name": "startMilestoneVote",
       "outputs": [],
       "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "submissionPeriod",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
       "type": "function"
     },
     {

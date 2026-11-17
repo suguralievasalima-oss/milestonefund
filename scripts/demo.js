@@ -1,7 +1,7 @@
 // Выполняет шаги демо-сценария для кампании #0 без MetaMask, от имени тестовых аккаунтов Hardhat.
 // Использование (PowerShell):
 //   $env:DEMO_STEP="start-vote"; npx.cmd hardhat run scripts/demo.js --network localhost
-// Шаги: start-vote | approve | reject | finalize | withdraw | refund | status
+// Шаги: start-vote | approve | reject | finalize | withdraw | cancel-stalled | refund | status
 //   approve / reject — голосуют инвесторы #1 и #2
 //   refund           — возврат всем инвесторам (#1, #2, #3)
 const hre = require("hardhat");
@@ -49,6 +49,9 @@ async function main() {
       break;
     case "withdraw":
       await send("creator withdrew milestone funds", fund.connect(creator).withdrawMilestone(id));
+      break;
+    case "cancel-stalled":
+      await send("stalled campaign cancelled", fund.connect(inv1).cancelStalled(id));
       break;
     case "refund":
       for (const s of [inv1, inv2, inv3]) await send(`${s.address} refunded`, fund.connect(s).refund(id));

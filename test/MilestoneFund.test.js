@@ -5,6 +5,7 @@ const { loadFixture, time } = require("@nomicfoundation/hardhat-network-helpers"
 const ETH = (v) => ethers.parseEther(String(v));
 const VOTING_PERIOD = 3 * 24 * 60 * 60; // 3 дня
 const DURATION = 7 * 24 * 60 * 60; // 7 дней сбора
+const SUBMISSION_PERIOD = 30 * 24 * 60 * 60; // 30 дней на отправку этапа
 
 // Состояния кампании и этапа (как в enum контракта)
 const State = { Funding: 0n, Active: 1n, Failed: 2n, Completed: 3n, Cancelled: 4n };
@@ -14,7 +15,7 @@ describe("MilestoneFund", function () {
   async function deployFixture() {
     const [creator, alice, bob, carol, outsider] = await ethers.getSigners();
     const Fund = await ethers.getContractFactory("MilestoneFund");
-    const fund = await Fund.deploy(VOTING_PERIOD);
+    const fund = await Fund.deploy(VOTING_PERIOD, SUBMISSION_PERIOD);
     return { fund, creator, alice, bob, carol, outsider };
   }
 
@@ -47,15 +48,17 @@ describe("MilestoneFund", function () {
   }
 
   describe("Deployment", function () {
-    it("stores the voting period", async function () {
+    it("stores the voting and submission periods", async function () {
       const { fund } = await loadFixture(deployFixture);
       expect(await fund.votingPeriod()).to.equal(VOTING_PERIOD);
+      expect(await fund.submissionPeriod()).to.equal(SUBMISSION_PERIOD);
       expect(await fund.QUORUM_PERCENT()).to.equal(30);
     });
 
-    it("rejects zero voting period", async function () {
+    it("rejects zero voting or submission period", async function () {
       const Fund = await ethers.getContractFactory("MilestoneFund");
-      await expect(Fund.deploy(0)).to.be.revertedWithCustomError(Fund, "InvalidDuration");
+      await expect(Fund.deploy(0, SUBMISSION_PERIOD)).to.be.revertedWithCustomError(Fund, "InvalidDuration");
+      await expect(Fund.deploy(VOTING_PERIOD, 0)).to.be.revertedWithCustomError(Fund, "InvalidDuration");
     });
   });
 
@@ -261,6 +264,81 @@ describe("MilestoneFund", function () {
         [carol, false],
       ]);
       expect((await fund.getMilestone(id, 0)).status).to.equal(MStatus.Rejected);
+    });
+  });
+
+  describe("Creator stake", function () {
+    // Автор вкладывает 6 из 10 ETH и пытается одобрить свои этапы сам
+    async function selfFundedFixture() {
+      const ctx = await campaignFixture();
+      const { fund, id, creator, alice, bob } = ctx;
+      await fund.connect(creator).contribute(id, { value: ETH(6) });
+      await fund.connect(alice).contribute(id, { value: ETH(3) });
+      await fund.connect(bob).contribute(id, { value: ETH(1) });
+      await fund.finalizeFunding(id);
+      return ctx;
+    }
+
+    it("the creator cannot vote on own milestones", async function () {
+      const { fund, id, creator } = await loadFixture(selfFundedFixture);
+      await fund.connect(creator).startMilestoneVote(id);
+      await expect(fund.connect(creator).vote(id, true)).to.be.revertedWithCustomError(fund, "CreatorCannotVote");
+    });
+
+    it("quorum is measured against outside investors only", async function () {
+      const { fund, id, creator, bob } = await loadFixture(selfFundedFixture);
+      // bob = 1 из 4 ETH сторонних инвесторов = 25% < 30% → отклонено
+      await runVote(fund, id, creator, [[bob, true]]);
+      expect((await fund.getMilestone(id, 0)).status).to.equal(MStatus.Rejected);
+    });
+
+    it("outside investors decide even when the creator holds the majority of funds", async function () {
+      const { fund, id, creator, alice, bob } = await loadFixture(selfFundedFixture);
+      await runVote(fund, id, creator, [
+        [alice, false],
+        [bob, true],
+      ]);
+      expect((await fund.getMilestone(id, 0)).status).to.equal(MStatus.Rejected);
+      // после отмены автор, как и все, получает только свою долю остатка
+      await expect(fund.connect(creator).refund(id)).to.changeEtherBalance(creator, ETH(6));
+    });
+  });
+
+  describe("Stalled campaigns", function () {
+    it("cannot be cancelled before the submission period ends", async function () {
+      const { fund, id } = await loadFixture(fundedFixture);
+      await expect(fund.cancelStalled(id)).to.be.revertedWithCustomError(fund, "NotStalled");
+    });
+
+    it("anyone can cancel after the creator misses the deadline; investors get full refunds", async function () {
+      const { fund, id, alice, outsider } = await loadFixture(fundedFixture);
+      await time.increase(SUBMISSION_PERIOD);
+      await expect(fund.connect(outsider).cancelStalled(id)).to.emit(fund, "CampaignStalled").withArgs(id, 0);
+      expect((await fund.getCampaign(id)).state).to.equal(State.Cancelled);
+      await expect(fund.connect(alice).refund(id)).to.changeEtherBalance(alice, ETH(5));
+    });
+
+    it("cannot be cancelled while a vote is open", async function () {
+      const { fund, id, creator } = await loadFixture(fundedFixture);
+      await time.increase(SUBMISSION_PERIOD - 60);
+      await fund.connect(creator).startMilestoneVote(id);
+      await time.increase(120);
+      await expect(fund.cancelStalled(id)).to.be.revertedWithCustomError(fund, "WrongMilestoneStatus");
+    });
+
+    it("the deadline restarts after each paid milestone", async function () {
+      const { fund, id, creator, alice, bob, carol } = await loadFixture(fundedFixture);
+      await runVote(fund, id, creator, [[alice, true]]);
+      await fund.connect(creator).withdrawMilestone(id);
+      const paidAt = await time.latest();
+      expect((await fund.getCampaign(id)).lastProgress).to.equal(paidAt);
+      await time.increase(SUBMISSION_PERIOD - 60);
+      await expect(fund.cancelStalled(id)).to.be.revertedWithCustomError(fund, "NotStalled");
+      await time.increase(60);
+      await fund.cancelStalled(id);
+      // остаток 7 ETH делится 5:3:2
+      await expect(fund.connect(bob).refund(id)).to.changeEtherBalance(bob, ETH(2.1));
+      await expect(fund.connect(carol).refund(id)).to.changeEtherBalance(carol, ETH(1.4));
     });
   });
 

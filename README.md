@@ -9,7 +9,9 @@ If a milestone is rejected, contributors reclaim the unreleased funds pro rata.
 - Many campaigns in one contract; each campaign has 1–10 milestones whose amounts sum to the goal
 - Contributions only during the funding phase, so vote weights are frozen before any vote
 - Stake-weighted voting with a 30% quorum and simple majority
-- Full refund if the goal is not reached; proportional refund of the remainder if a milestone is rejected
+- The creator cannot vote on their own milestones; the quorum counts outside investors only
+- Submission deadline: if the creator does not submit the next milestone in time, anyone can cancel the campaign
+- Full refund if the goal is not reached; proportional refund of the remainder if a milestone is rejected or the campaign stalls
 - Reentrancy protection (OpenZeppelin `ReentrancyGuard` + checks-effects-interactions), custom errors
 - React + ethers v6 frontend with MetaMask
 
@@ -30,7 +32,7 @@ Terminal 1 — local blockchain:
 npx hardhat node
 ```
 
-Terminal 2 — deploy and create demo campaigns (voting period on localhost = 5 minutes):
+Terminal 2 — deploy and create demo campaigns (on localhost: voting period 5 minutes, milestone submission deadline 1 hour):
 
 ```powershell
 npm run deploy:local
@@ -67,11 +69,20 @@ Seed creates campaign **#0** (Active, 10 ETH from accounts #1/#2/#3) and **#1** 
 2. Accounts #1 and #2 → **Approve**
 3. Advance time 600 s → **Finalize vote** → creator **Withdraw milestone funds**
 4. Next milestone: vote **Reject** → campaign Cancelled → investors **Refund** their share of the remainder
+5. Stalled campaign: don't start the next vote, advance time by 3600 s → **Cancel stalled campaign** → investors **Refund**
+
+The same steps can be run without MetaMask:
+
+```powershell
+$env:DEMO_STEP="start-vote"; npx hardhat run scripts/demo.js --network localhost
+```
+
+Steps: `start-vote`, `approve`, `reject`, `finalize`, `withdraw`, `cancel-stalled`, `refund`, `status`.
 
 ## Tests, coverage, gas
 
 ```powershell
-npx hardhat test          # 40 tests
+npx hardhat test          # 47 tests
 npx hardhat coverage      # MilestoneFund.sol: 100% statements / functions / lines
 $env:REPORT_GAS="true"; npx hardhat test
 ```
@@ -81,9 +92,9 @@ Saved results: [docs/test-results.txt](docs/test-results.txt), [docs/coverage.tx
 
 ## Sepolia deployment
 
-1. Copy `.env.example` to `.env`, fill `SEPOLIA_RPC_URL`, `PRIVATE_KEY` (a separate test account!), `ETHERSCAN_API_KEY`, `VOTING_PERIOD` (e.g. `300`).
+1. Copy `.env.example` to `.env`, fill `SEPOLIA_RPC_URL`, `PRIVATE_KEY` (a separate test account!), `ETHERSCAN_API_KEY`, `VOTING_PERIOD` and `SUBMISSION_PERIOD` (seconds).
 2. `npm run deploy:sepolia` — this also updates `frontend/src/contract/MilestoneFund.json`.
-3. `npx hardhat verify --network sepolia <address> <votingPeriod>`
+3. `npx hardhat verify --network sepolia <address> <votingPeriod> <submissionPeriod>`
 
 ## Repository structure
 
@@ -91,7 +102,7 @@ Saved results: [docs/test-results.txt](docs/test-results.txt), [docs/coverage.tx
 contracts/MilestoneFund.sol      main contract
 contracts/test/Attacker.sol      reentrancy attacker used in tests
 test/MilestoneFund.test.js       test suite
-scripts/                         deploy, seed, advance-time
+scripts/                         deploy, seed, advance-time, demo
 frontend/                        React app
 docs/                            test, coverage and gas results
 ```
