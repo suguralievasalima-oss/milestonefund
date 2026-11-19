@@ -6,8 +6,8 @@ interface IMilestoneFund {
     function refund(uint256 id) external;
 }
 
-/// @notice Тестовый контракт-злоумышленник: при получении ETH пытается
-///         повторно вызвать refund (reentrancy-атака).
+/// @notice Test attacker contract: when it receives ETH it tries to
+///         call refund again (reentrancy attack).
 contract Attacker {
     IMilestoneFund public immutable fund;
     uint256 public campaignId;
@@ -30,8 +30,8 @@ contract Attacker {
     receive() external payable {
         if (reentryAttempts == 0) {
             reentryAttempts++;
-            // Повторный вызов должен провалиться (ReentrancyGuard);
-            // ловим ошибку, чтобы зафиксировать результат попытки.
+            // The nested call must fail (ReentrancyGuard);
+            // catch the error to record the outcome of the attempt.
             try fund.refund(campaignId) {
                 reentrySucceeded = true;
             } catch {}

@@ -8,7 +8,7 @@ const networks = {
   localhost: { url: "http://127.0.0.1:8545" },
 };
 
-// Sepolia включается только если заданы переменные в .env
+// Sepolia is enabled only when the variables are set in .env
 if (SEPOLIA_RPC_URL && PRIVATE_KEY) {
   networks.sepolia = { url: SEPOLIA_RPC_URL, accounts: [PRIVATE_KEY] };
 }

@@ -3,11 +3,11 @@ const { ethers } = require("hardhat");
 const { loadFixture, time } = require("@nomicfoundation/hardhat-network-helpers");
 
 const ETH = (v) => ethers.parseEther(String(v));
-const VOTING_PERIOD = 3 * 24 * 60 * 60; // 3 дня
-const DURATION = 7 * 24 * 60 * 60; // 7 дней сбора
-const SUBMISSION_PERIOD = 30 * 24 * 60 * 60; // 30 дней на отправку этапа
+const VOTING_PERIOD = 3 * 24 * 60 * 60; // 3 days
+const DURATION = 7 * 24 * 60 * 60; // 7-day funding period
+const SUBMISSION_PERIOD = 30 * 24 * 60 * 60; // 30 days to submit a milestone
 
-// Состояния кампании и этапа (как в enum контракта)
+// Campaign and milestone states (same order as the contract enums)
 const State = { Funding: 0n, Active: 1n, Failed: 2n, Completed: 3n, Cancelled: 4n };
 const MStatus = { Pending: 0n, Voting: 1n, Approved: 2n, Rejected: 3n, Paid: 4n };
 
@@ -19,7 +19,7 @@ describe("MilestoneFund", function () {
     return { fund, creator, alice, bob, carol, outsider };
   }
 
-  // Кампания на 10 ETH из 3 этапов: 3 + 3 + 4
+  // A 10 ETH campaign with 3 milestones: 3 + 3 + 4
   async function campaignFixture() {
     const ctx = await deployFixture();
     await ctx.fund
@@ -28,7 +28,7 @@ describe("MilestoneFund", function () {
     return { ...ctx, id: 0n };
   }
 
-  // Кампания собрана: alice 5, bob 3, carol 2 → Active
+  // Fully funded: alice 5, bob 3, carol 2 → Active
   async function fundedFixture() {
     const ctx = await campaignFixture();
     const { fund, id, alice, bob, carol } = ctx;
@@ -39,7 +39,7 @@ describe("MilestoneFund", function () {
     return ctx;
   }
 
-  // Проводит голосование по текущему этапу: votes — массив [signer, approve]
+  // Runs a vote on the current milestone: votes is an array of [signer, approve]
   async function runVote(fund, id, creator, votes) {
     await fund.connect(creator).startMilestoneVote(id);
     for (const [signer, approve] of votes) await fund.connect(signer).vote(id, approve);
@@ -257,7 +257,7 @@ describe("MilestoneFund", function () {
 
     it("a tie by weight is not a majority: milestone rejected", async function () {
       const { fund, id, creator, alice, bob, carol } = await loadFixture(fundedFixture);
-      // alice (5) за, bob (3) + carol (2) против → 5 vs 5 — ничья, этап НЕ одобрен
+      // alice (5) yes, bob (3) + carol (2) no → 5 vs 5 — a tie, milestone NOT approved
       await runVote(fund, id, creator, [
         [alice, true],
         [bob, false],
@@ -268,7 +268,7 @@ describe("MilestoneFund", function () {
   });
 
   describe("Creator stake", function () {
-    // Автор вкладывает 6 из 10 ETH и пытается одобрить свои этапы сам
+    // The creator funds 6 of 10 ETH and tries to approve their own milestones
     async function selfFundedFixture() {
       const ctx = await campaignFixture();
       const { fund, id, creator, alice, bob } = ctx;
@@ -287,7 +287,7 @@ describe("MilestoneFund", function () {
 
     it("quorum is measured against outside investors only", async function () {
       const { fund, id, creator, bob } = await loadFixture(selfFundedFixture);
-      // bob = 1 из 4 ETH сторонних инвесторов = 25% < 30% → отклонено
+      // bob = 1 of 4 ETH of outside stake = 25% < 30% → rejected
       await runVote(fund, id, creator, [[bob, true]]);
       expect((await fund.getMilestone(id, 0)).status).to.equal(MStatus.Rejected);
     });
@@ -299,7 +299,7 @@ describe("MilestoneFund", function () {
         [bob, true],
       ]);
       expect((await fund.getMilestone(id, 0)).status).to.equal(MStatus.Rejected);
-      // после отмены автор, как и все, получает только свою долю остатка
+      // after cancellation the creator, like everyone, gets only their share of the remainder
       await expect(fund.connect(creator).refund(id)).to.changeEtherBalance(creator, ETH(6));
     });
   });
@@ -336,7 +336,7 @@ describe("MilestoneFund", function () {
       await expect(fund.cancelStalled(id)).to.be.revertedWithCustomError(fund, "NotStalled");
       await time.increase(60);
       await fund.cancelStalled(id);
-      // остаток 7 ETH делится 5:3:2
+      // the remaining 7 ETH is split 5:3:2
       await expect(fund.connect(bob).refund(id)).to.changeEtherBalance(bob, ETH(2.1));
       await expect(fund.connect(carol).refund(id)).to.changeEtherBalance(carol, ETH(1.4));
     });
@@ -345,7 +345,7 @@ describe("MilestoneFund", function () {
   describe("Quorum", function () {
     it("rejects a milestone when turnout is below 30%, even if all votes are yes", async function () {
       const { fund, id, creator, carol } = await loadFixture(fundedFixture);
-      // carol = 2 из 10 ETH = 20% < 30%
+      // carol = 2 of 10 ETH = 20% < 30%
       await runVote(fund, id, creator, [[carol, true]]);
       expect((await fund.getMilestone(id, 0)).status).to.equal(MStatus.Rejected);
       expect((await fund.getCampaign(id)).state).to.equal(State.Cancelled);
@@ -353,7 +353,7 @@ describe("MilestoneFund", function () {
 
     it("approves at exactly 30% turnout", async function () {
       const { fund, id, creator, bob } = await loadFixture(fundedFixture);
-      // bob = 3 из 10 ETH = ровно 30%
+      // bob = 3 of 10 ETH = exactly 30%
       await runVote(fund, id, creator, [[bob, true]]);
       expect((await fund.getMilestone(id, 0)).status).to.equal(MStatus.Approved);
     });
@@ -398,7 +398,7 @@ describe("MilestoneFund", function () {
     it("overfunding is paid out with the last milestone", async function () {
       const { fund, creator, alice } = await loadFixture(deployFixture);
       await fund.createCampaign("T", ETH(2), DURATION, ["A", "B"], [ETH(1), ETH(1)]);
-      await fund.connect(alice).contribute(0, { value: ETH(3) }); // на 1 ETH больше цели
+      await fund.connect(alice).contribute(0, { value: ETH(3) }); // 1 ETH above the goal
       await fund.finalizeFunding(0);
       await runVote(fund, 0, creator, [[alice, true]]);
       await fund.withdrawMilestone(0);
@@ -410,7 +410,7 @@ describe("MilestoneFund", function () {
       const { fund, id, creator, alice } = await loadFixture(fundedFixture);
       await runVote(fund, id, creator, [[alice, true]]);
       await fund.connect(creator).withdrawMilestone(id);
-      // текущий этап сдвинулся на следующий (Pending) → вывод невозможен
+      // the current milestone moved on (Pending) → nothing to withdraw
       await expect(fund.connect(creator).withdrawMilestone(id)).to.be.revertedWithCustomError(
         fund,
         "WrongMilestoneStatus"
@@ -432,13 +432,13 @@ describe("MilestoneFund", function () {
 
     it("proportional refund of the remainder after a rejected milestone", async function () {
       const { fund, id, creator, alice, bob, carol } = await loadFixture(fundedFixture);
-      // этап 1 (3 ETH) одобрен и выплачен
+      // milestone 1 (3 ETH) approved and paid
       await runVote(fund, id, creator, [
         [alice, true],
         [bob, true],
       ]);
       await fund.connect(creator).withdrawMilestone(id);
-      // этап 2 отклонён
+      // milestone 2 rejected
       await runVote(fund, id, creator, [
         [alice, false],
         [bob, false],
@@ -446,7 +446,7 @@ describe("MilestoneFund", function () {
       ]);
       expect((await fund.getCampaign(id)).state).to.equal(State.Cancelled);
 
-      // остаток 7 ETH делится 5:3:2
+      // the remaining 7 ETH is split 5:3:2
       await expect(fund.connect(alice).refund(id))
         .to.emit(fund, "Refunded")
         .withArgs(id, alice.address, ETH(3.5));
@@ -492,7 +492,7 @@ describe("MilestoneFund", function () {
       await attacker.attack();
       expect(await attacker.reentryAttempts()).to.equal(1);
       expect(await attacker.reentrySucceeded()).to.equal(false);
-      // злоумышленник получил только свой вклад, деньги alice на месте
+      // the attacker got only its own contribution; alice's funds are untouched
       expect(await ethers.provider.getBalance(await attacker.getAddress())).to.equal(ETH(2));
       expect(await ethers.provider.getBalance(await fund.getAddress())).to.equal(ETH(3));
     });
@@ -504,7 +504,7 @@ describe("MilestoneFund", function () {
       await fund.connect(alice).contribute(0, { value: ETH(1) });
       await fund.connect(bob).contribute(1, { value: ETH(1) });
       await fund.finalizeFunding(0);
-      // alice не может голосовать в кампании B
+      // alice cannot vote in campaign B
       await fund.finalizeFunding(1);
       await fund.connect(creator).startMilestoneVote(1);
       await expect(fund.connect(alice).vote(1, true)).to.be.revertedWithCustomError(fund, "NotInvestor");

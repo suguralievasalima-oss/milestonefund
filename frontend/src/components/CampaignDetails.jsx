@@ -22,7 +22,7 @@ export default function CampaignDetails({ wallet, campaign: c, now, version, onB
       .catch((e) => console.error(e));
   }, [readContract]);
 
-  // Загружаем этапы и данные текущего пользователя
+  // Load milestones and the current user's data
   useEffect(() => {
     if (!readContract || !c) return;
     let cancelled = false;
@@ -66,7 +66,7 @@ export default function CampaignDetails({ wallet, campaign: c, now, version, onB
   const current = c.currentMilestone < c.milestoneCount ? milestones[c.currentMilestone] : null;
   const fundingOpen = c.state === 0 && now < c.deadline;
   const canFinalizeFunding = c.state === 0 && (now >= c.deadline || c.totalRaised >= c.goal);
-  // Срок, до которого автор должен отправить текущий этап на голосование
+  // Deadline for the creator to submit the current milestone for a vote
   const submitBy = submissionPeriod !== null && c.state === 1 ? c.lastProgress + submissionPeriod : null;
   const stalled = submitBy !== null && current?.status === 0 && now >= submitBy;
 

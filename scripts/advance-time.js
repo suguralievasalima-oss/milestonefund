@@ -1,4 +1,4 @@
-// Сдвигает время локальной сети. Использование (PowerShell):
+// Moves the local network clock forward. Usage (PowerShell):
 //   $env:ADVANCE_SECONDS="600"; npx hardhat run scripts/advance-time.js --network localhost
 const hre = require("hardhat");
 

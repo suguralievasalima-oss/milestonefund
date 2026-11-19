@@ -1,9 +1,9 @@
-// Выполняет шаги демо-сценария для кампании #0 без MetaMask, от имени тестовых аккаунтов Hardhat.
-// Использование (PowerShell):
+// Runs demo steps for campaign #0 without MetaMask, using the Hardhat test accounts.
+// Usage (PowerShell):
 //   $env:DEMO_STEP="start-vote"; npx.cmd hardhat run scripts/demo.js --network localhost
-// Шаги: start-vote | approve | reject | finalize | withdraw | cancel-stalled | refund | status
-//   approve / reject — голосуют инвесторы #1 и #2
-//   refund           — возврат всем инвесторам (#1, #2, #3)
+// Steps: start-vote | approve | reject | finalize | withdraw | cancel-stalled | refund | status
+//   approve / reject — backers #1 and #2 vote
+//   refund           — refunds all backers (#1, #2, #3)
 const hre = require("hardhat");
 const deployment = require("../frontend/src/contract/MilestoneFund.json");
 

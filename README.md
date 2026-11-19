@@ -109,5 +109,5 @@ docs/                            test, coverage and gas results
 
 ## Authors
 
-- [Name 1] — smart contract, tests, deployment
-- [Name 2] — frontend, report, presentation
+- Salima Suguralieva — smart contract, tests, security analysis, deployment
+- Aliya Suguralieva — frontend, demo, cost analysis, report, presentation

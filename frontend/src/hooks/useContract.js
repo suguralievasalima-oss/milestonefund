@@ -4,7 +4,7 @@ import deployment from "../contract/MilestoneFund.json";
 
 const RPC_FALLBACK = { 31337: "http://127.0.0.1:8545" };
 
-/** Подключение MetaMask, текущий аккаунт, сеть и экземпляры контракта. */
+/** MetaMask connection, current account, network and contract instances. */
 export function useContract() {
   const [account, setAccount] = useState(null);
   const [chainId, setChainId] = useState(null);
@@ -13,7 +13,7 @@ export function useContract() {
 
   const browserProvider = useMemo(() => (hasWallet ? new BrowserProvider(window.ethereum) : null), [hasWallet]);
 
-  // Провайдер для чтения: MetaMask в нужной сети, иначе прямой RPC (для localhost)
+  // Read provider: MetaMask on the right network, otherwise a direct RPC (for localhost)
   const readProvider = useMemo(() => {
     if (browserProvider && chainId === deployment.chainId) return browserProvider;
     const url = RPC_FALLBACK[deployment.chainId];
@@ -73,7 +73,7 @@ export function useContract() {
   useEffect(() => {
     if (!hasWallet) return;
     sync();
-    // При смене сети перезагружаем страницу (рекомендация MetaMask)
+    // Reload the page when the network changes (recommended by MetaMask)
     const onChain = () => window.location.reload();
     const onAccounts = () => sync();
     window.ethereum.on("accountsChanged", onAccounts);

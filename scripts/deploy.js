@@ -4,8 +4,8 @@ const hre = require("hardhat");
 
 async function main() {
   const { ethers, network } = hre;
-  // Периоды из .env (VOTING_PERIOD, SUBMISSION_PERIOD, сек). По умолчанию на localhost
-  // голосование 5 минут и срок сдачи этапа 1 час, в остальных сетях 3 и 30 дней.
+  // Periods come from .env (VOTING_PERIOD, SUBMISSION_PERIOD, seconds). Defaults on localhost:
+  // 5-minute votes and a 1-hour submission deadline; on other networks 3 and 30 days.
   const local = network.name === "localhost" || network.name === "hardhat";
   const votingPeriod = Number(process.env.VOTING_PERIOD || (local ? 300 : 3 * 24 * 60 * 60));
   const submissionPeriod = Number(process.env.SUBMISSION_PERIOD || (local ? 3600 : 30 * 24 * 60 * 60));
@@ -20,7 +20,7 @@ async function main() {
   const address = await fund.getAddress();
   console.log(`MilestoneFund deployed to: ${address}`);
 
-  // Сохраняем адрес и ABI для фронтенда
+  // Save the address and ABI for the frontend
   const artifact = await hre.artifacts.readArtifact("MilestoneFund");
   const { chainId } = await ethers.provider.getNetwork();
   const outDir = path.join(__dirname, "..", "frontend", "src", "contract");

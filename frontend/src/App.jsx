@@ -32,7 +32,7 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
 
-  // Загружает все кампании и время блокчейна (на localhost время может быть сдвинуто)
+  // Loads all campaigns and the chain time (on localhost the clock can be moved forward)
   const load = useCallback(async () => {
     const { readContract, readProvider } = wallet;
     if (!readContract) return;
@@ -61,8 +61,8 @@ export default function App() {
     return () => clearInterval(t);
   }, [load]);
 
-  // На localhost время сети меняется скриптом advance-time, поэтому
-  // локальные часы тикают от последнего известного времени блока
+  // On localhost the chain clock is moved by the advance-time script, so
+  // the local clock ticks on from the last known block time
   useEffect(() => {
     const t = setInterval(() => setNow((n) => n + 1), 1000);
     return () => clearInterval(t);

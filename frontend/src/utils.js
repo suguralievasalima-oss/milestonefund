@@ -25,7 +25,7 @@ export function timeLeft(ts, now) {
   return `${m}m ${s % 60}s left`;
 }
 
-// Понятные сообщения для кастомных ошибок контракта
+// Readable messages for the contract's custom errors
 const ERROR_TEXT = {
   InvalidMilestones: "Milestones are invalid: 1–10 items, each > 0, sum must equal the goal.",
   InvalidGoal: "Goal must be greater than zero.",

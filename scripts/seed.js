@@ -1,4 +1,4 @@
-// Создаёт демо-кампании на localhost, чтобы во фронтенде было что показать
+// Creates demo campaigns on localhost so the frontend has data to show
 const hre = require("hardhat");
 const deployment = require("../frontend/src/contract/MilestoneFund.json");
 
@@ -9,7 +9,7 @@ async function main() {
   const E = (v) => ethers.parseEther(String(v));
   const DAY = 24 * 60 * 60;
 
-  // 1) Уже собранная кампания — можно сразу голосовать по этапам
+  // 1) A fully funded campaign: milestone votes can start right away
   await (await fund.connect(creator).createCampaign(
     "Open-source weather station",
     E(10),
@@ -22,7 +22,7 @@ async function main() {
   await (await fund.connect(carol).contribute(0, { value: E(2) })).wait();
   await (await fund.finalizeFunding(0)).wait();
 
-  // 2) Кампания в процессе сбора
+  // 2) A campaign that is still raising funds
   await (await fund.connect(bob).createCampaign(
     "Community library app",
     E(6),
