@@ -86,7 +86,7 @@ npx hardhat test          # 47 tests
 npx hardhat coverage      # MilestoneFund.sol: 100% statements / functions / lines
 $env:REPORT_GAS="true"; npx hardhat test
 ```
-
+Project report: [docs/REPORT.md](docs/REPORT.md)
 Saved results: [docs/test-results.txt](docs/test-results.txt), [docs/coverage.txt](docs/coverage.txt),
 [docs/gas-report.txt](docs/gas-report.txt).
 
